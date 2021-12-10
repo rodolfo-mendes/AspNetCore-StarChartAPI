@@ -12,25 +12,23 @@ namespace StarChart.Controllers
     [Route("")]
     public class CelestialObjectController : ControllerBase
     {
-        private readonly ApplicationDbContext _context;
+        private readonly ICelestialObjectRepository _repository;
 
         public CelestialObjectController(ApplicationDbContext context)
         {
-            _context = context;
+            _repository = new CelestialObjectEntityRepository(context);
         }
 
         [HttpGet("{id:int}", Name = "GetById")]
         public IActionResult GetById(int id)
         {
-            var celestialObject = _context.CelestialObjects.Find(id);
+            var celestialObject = _repository.GetById(id);
             if (celestialObject == null)
             {
                 return NotFound();
             }
 
-            celestialObject.Satellites = _context.CelestialObjects
-                .Where(c => c.OrbitedObjectId == id)
-                .ToList();
+            celestialObject.Satellites = _repository.GetByOrbitedObjectId(id);
 
             return Ok(celestialObject);
         }
@@ -38,9 +36,7 @@ namespace StarChart.Controllers
         [HttpGet("{name}", Name = "GetByName")]
         public IActionResult GetByName(string name)
         {
-            var celestialObjects = _context.CelestialObjects
-                .Where(o => o.Name == name)
-                .ToList();
+            var celestialObjects = _repository.GetByName(name);
             if (celestialObjects == null || celestialObjects.Count == 0)
             {
                 return NotFound();
@@ -48,9 +44,7 @@ namespace StarChart.Controllers
 
             foreach (var obj in celestialObjects)
             {
-                obj.Satellites = _context.CelestialObjects
-                    .Where(o => o.OrbitedObjectId == obj.Id)
-                    .ToList();
+                obj.Satellites = _repository.GetByOrbitedObjectId(obj.Id);
             }
 
             return Ok(celestialObjects);
@@ -59,12 +53,10 @@ namespace StarChart.Controllers
         [HttpGet]
         public IActionResult GetAll()
         {
-            var celestialObjects = _context.CelestialObjects.ToList();
+            var celestialObjects = _repository.GetAll();
             foreach (var obj in celestialObjects)
             {
-                obj.Satellites = _context.CelestialObjects
-                    .Where(o => o.OrbitedObjectId == obj.Id)
-                    .ToList();
+                obj.Satellites = _repository.GetByOrbitedObjectId(obj.Id);
             }
 
             return Ok(celestialObjects);
@@ -73,8 +65,7 @@ namespace StarChart.Controllers
         [HttpPost]
         public IActionResult Create([FromBody] CelestialObject celestialObject)
         {
-            _context.CelestialObjects.Add(celestialObject);
-            _context.SaveChanges();
+            _repository.Create(celestialObject);
 
             return CreatedAtRoute("GetById", new {id = celestialObject.Id}, celestialObject);
         }
@@ -82,7 +73,7 @@ namespace StarChart.Controllers
         [HttpPut("{id}")]
         public IActionResult Update(int id, [FromBody] CelestialObject celestialObject)
         {
-            var oldCelestialObject = _context.CelestialObjects.Find(id);
+            var oldCelestialObject = _repository.GetById(id);
             if (oldCelestialObject == null)
             {
                 return NotFound();
@@ -92,8 +83,7 @@ namespace StarChart.Controllers
             oldCelestialObject.OrbitalPeriod = celestialObject.OrbitalPeriod;
             oldCelestialObject.OrbitedObjectId = celestialObject.OrbitedObjectId;
 
-            _context.CelestialObjects.Update(oldCelestialObject);
-            _context.SaveChanges();
+            _repository.Update(oldCelestialObject);
 
             return NoContent();
         }
@@ -101,7 +91,7 @@ namespace StarChart.Controllers
         [HttpPatch("{id}/{name}")]
         public IActionResult RenameObject(int id, string name)
         {
-            var celestialObject = _context.CelestialObjects.Find(id);
+            var celestialObject = _repository.GetById(id);
             if (celestialObject == null)
             {
                 return NotFound();
@@ -109,8 +99,7 @@ namespace StarChart.Controllers
 
             celestialObject.Name = name;
 
-            _context.CelestialObjects.Update(celestialObject);
-            _context.SaveChanges();
+            _repository.Update(celestialObject);
 
             return NoContent();
         }
@@ -118,17 +107,16 @@ namespace StarChart.Controllers
         [HttpDelete("{id}")]
         public IActionResult Delete(int id)
         {
-            var objectsToBeDeleted = _context.CelestialObjects
-                .Where(o => (o.Id == id || o.OrbitedObjectId == id))
-                .ToList();
-
-            if (objectsToBeDeleted == null || objectsToBeDeleted.Count == 0)
+            var objectToBeDeleted = _repository.GetById(id);
+            if (objectToBeDeleted == null)
             {
                 return NotFound();
             }
 
-            _context.CelestialObjects.RemoveRange(objectsToBeDeleted);
-            _context.SaveChanges();
+            var objectsInOrbit = _repository.GetByOrbitedObjectId(id);
+
+            _repository.DeleteAll(objectsInOrbit);
+            _repository.Delete(objectToBeDeleted);
 
             return NoContent();
         }
